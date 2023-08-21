@@ -2,6 +2,18 @@
 
 > Most recent first
 
+* `21st of August 2023`
+
+Very minor fix in template report.
+
+* `03rd of May 2023`
+
+Bug fixes release sorting out an important change from Spock 2: `@Unrolled` became the default, so spock-reports
+stopped detecting correctly when a Specification was unrolled, causing the display name of features to look wrong
+sometimes. With this release, feature names are displayed correctly.
+
+More code is now statically-compiled, which continues to improve the performance of report generators.
+
 * `14th of November 2022`
 
 Finally! Groovy 4 support is here!!

@@ -5,6 +5,7 @@ import com.athaydes.spockframework.report.internal.FailureKind
 import com.athaydes.spockframework.report.internal.FeatureRun
 import com.athaydes.spockframework.report.internal.SpecData
 import com.athaydes.spockframework.report.internal.SpecProblem
+import groovy.transform.CompileDynamic
 import groovy.transform.CompileStatic
 import org.spockframework.runtime.model.BlockKind
 import org.spockframework.runtime.model.FeatureInfo
@@ -13,12 +14,12 @@ import org.spockframework.runtime.model.SpecInfo
 import org.spockframework.util.Nullable
 import spock.lang.PendingFeature
 import spock.lang.Specification
-import spock.lang.Unroll
 
 import java.lang.annotation.Annotation
 import java.nio.file.Paths
 import java.util.regex.Pattern
 
+@CompileStatic
 class Utils {
 
     public static final Map block2String = [
@@ -92,6 +93,7 @@ class Utils {
         successRate( totalExecuted, ( errors + failures ).toInteger() )
     }
 
+    @CompileDynamic
     static Map aggregateStats( Map<String, Map> aggregatedData ) {
         def result = [ total : 0, executed: 0, passed: 0, failed: 0, skipped: 0,
                        fTotal: 0, fExecuted: 0, fPassed: 0, fSkipped: 0, fFails: 0, fErrors: 0, time: 0.0 ]
@@ -122,8 +124,7 @@ class Utils {
     }
 
     static boolean isUnrolled( FeatureInfo feature ) {
-        feature.spec?.isAnnotationPresent( Unroll ) ||
-                featureAnnotation( feature, Unroll ) != null
+        feature.reportIterations
     }
 
     static boolean isFailure( SpecProblem problem ) {
@@ -221,21 +222,16 @@ class Utils {
         ]
     }
 
-    static String featureNameFrom( FeatureInfo feature, IterationInfo iteration, int index ) {
-        if ( feature.iterationNameProvider && iteration.dataValues?.length > 0 ) {
-            def name = feature.iterationNameProvider.getName( iteration )
-
-            // reset the index instance to fix #70
-            def nameMatcher = name =~ /(.*)\[\d+\]$/
-            if ( nameMatcher.matches() ) {
-                def rawName = nameMatcher.group( 1 )
-                return "$rawName [$index]"
-            } else {
-                return name
+    static String featureNameFrom( FeatureInfo feature, IterationInfo iteration,
+                                   int index, boolean multipleIterations = false ) {
+        if ( feature.reportIterations && multipleIterations ) {
+            if ( feature.name.contains( '#' ) && feature.iterationNameProvider ) {
+                def name = feature.iterationNameProvider.getName( iteration )
+                return "$name [$index]"
             }
-        } else {
-            return feature.name
+            return "${feature.name} [$index]"
         }
+        return feature.name
     }
 
     static String getSpecClassName( SpecData data ) {
@@ -247,7 +243,7 @@ class Utils {
     }
 
     static List<String> getParentSpecNames( String className ) {
-        def result = [ ]
+        List<String> result = new ArrayList<>( 2 )
         Class<?> type
         try {
             type = Class.forName( className )
@@ -280,16 +276,16 @@ class Utils {
     private static void collectRoots( root, List<String> result ) {
         switch ( root ) {
             case File:
-                result.add( root.path )
+                result.add( ( ( File ) root ).path )
                 break
             case String:
-                result.add( root )
+                result.add( ( String ) root )
                 break
             case Iterable:
-                root.each { r -> collectRoots( r, result ) }
+                ( root as Iterable ).each { r -> collectRoots( r, result ) }
                 break
             case Closure:
-                collectRoots( root(), result )
+                collectRoots( ( root as Closure ).call(), result )
                 break
             default:
                 throw new IllegalArgumentException( "Cannot use object as a sourceRoot " +
@@ -333,7 +329,7 @@ class Utils {
             }
             pathParts << data.info.filename
 
-            def specFile = Paths.get( root.absolutePath, *pathParts ).toFile()
+            def specFile = Paths.get( root.absolutePath, pathParts.toArray( new String[0] ) ).toFile()
 
             if ( specFile.isFile() ) {
                 return specFile
